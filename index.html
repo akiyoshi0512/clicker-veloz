@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Juego de tarjetas</title>
+</head>
+<body>
+
+<canvas id="juego" width="500" height="500"></canvas>
+
+<script>
+
+// Crear ventana de juego
+
+const canvas = document.getElementById("juego");
+const ctx = canvas.getContext("2d");
+
+const back = "rgb(200, 255, 255)";
+
+
+// Clase de rectángulo
+
+class Area {
+    constructor(x = 0, y = 0, width = 10, height = 10, color = null) {
+        this.rect = { x, y, width, height };
+        this.fill_color = color;
+    }
+
+    color(new_color) {
+        this.fill_color = new_color;
+    }
+
+    fill() {
+        ctx.fillStyle = this.fill_color;
+        ctx.fillRect(
+            this.rect.x,
+            this.rect.y,
+            this.rect.width,
+            this.rect.height
+        );
+    }
+
+    outline(frame_color, thickness) {
+        ctx.strokeStyle = frame_color;
+        ctx.lineWidth = thickness;
+        ctx.strokeRect(
+            this.rect.x,
+            this.rect.y,
+            this.rect.width,
+            this.rect.height
+        );
+    }
+
+    collidepoint(x, y) {
+        return (
+            x >= this.rect.x &&
+            x <= this.rect.x + this.rect.width &&
+            y >= this.rect.y &&
+            y <= this.rect.y + this.rect.height
+        );
+    }
+}
+
+
+// Clase etiqueta
+
+class Label extends Area {
+
+    set_text(text, fsize = 12, text_color = "black") {
+        this.text = text;
+        this.fsize = fsize;
+        this.text_color = text_color;
+    }
+
+    draw(shift_x = 0, shift_y = 0) {
+        this.fill();
+
+        ctx.fillStyle = this.text_color;
+        ctx.font = `${this.fsize}px Verdana`;
+        ctx.textBaseline = "top";
+
+        ctx.fillText(
+            this.text,
+            this.rect.x + shift_x,
+            this.rect.y + shift_y
+        );
+    }
+}
+
+
+// Colores
+
+const YELLOW = "rgb(255, 255, 0)";
+const DARK_BLUE = "rgb(0, 0, 100)";
+const BLUE = "rgb(80, 80, 255)";
+const GREEN = "rgb(0, 255, 0)";
+const RED = "rgb(255, 0, 0)";
+
+
+// Crear tarjetas
+
+let cards = [];
+let num_cards = 4;
+
+let x = 70;
+
+for (let i = 0; i < num_cards; i++) {
+
+    let new_card = new Label(x, 170, 70, 100, YELLOW);
+
+    new_card.set_text("", 26);
+
+    cards.push(new_card);
+
+    x = x + 100;
+}
+
+
+// Contadores y estadísticas
+
+let score = 0;
+
+let game_start = Date.now();
+
+let score_label = new Label(50, 30, 180, 30, back);
+let time_label = new Label(270, 30, 180, 30, back);
+
+let game_over = false;
+let result = "";
+
+
+// Variables del juego
+
+let active_card = Math.floor(Math.random() * num_cards);
+
+let start_time = Date.now();
+
+let show_text = true;
+
+let reaction_card = -1;
+let reaction_start = 0;
+
+const TIME_TEXT = 1500;
+const TIME_REACTION = 500;
+const TIME_PAUSE = 700;
+const TIME_GAME = 10000;
+
+
+// Procesar clics
+
+canvas.addEventListener("mousedown", function(event) {
+
+    if (game_over) return;
+
+    if (reaction_card === -1) {
+
+        let rect = canvas.getBoundingClientRect();
+
+        let mouse_x = event.clientX - rect.left;
+        let mouse_y = event.clientY - rect.top;
+
+        for (let i = 0; i < num_cards; i++) {
+
+            if (cards[i].collidepoint(mouse_x, mouse_y)) {
+
+                if (show_text && i === active_card) {
+
+                    cards[i].color(GREEN);
+                    score = score + 1;
+
+                } else {
+
+                    cards[i].color(RED);
+
+                }
+
+                reaction_card = i;
+                reaction_start = Date.now();
+
+                show_text = false;
+            }
+        }
+    }
+});
+
+
+// Ciclo principal
+
+function game_loop() {
+
+    let current_time = Date.now();
+
+    // Calcular tiempo transcurrido
+
+    let elapsed_time = current_time - game_start;
+
+
+    // Tiempo de visualización de CLIC
+
+    if (show_text) {
+
+        if (current_time - start_time >= TIME_TEXT) {
+
+            show_text = false;
+            start_time = current_time;
+
+        }
+    }
+
+
+    // Reiniciar color
+
+    if (reaction_card !== -1) {
+
+        if (current_time - reaction_start >= TIME_REACTION) {
+
+            cards[reaction_card].color(YELLOW);
+
+            reaction_card = -1;
+            start_time = current_time;
+
+        }
+    }
+
+
+    // Elegir otra tarjeta
+
+    if (!show_text && reaction_card === -1) {
+
+        if (current_time - start_time >= TIME_PAUSE) {
+
+            active_card = Math.floor(Math.random() * num_cards);
+
+            start_time = current_time;
+            show_text = true;
+
+        }
+    }
+
+
+    // Actualizar estadísticas
+
+    score_label.set_text("Puntos: " + score, 20);
+
+    time_label.set_text(
+        "Tiempo: " + Math.floor(elapsed_time / 1000),
+        20
+    );
+
+
+    // Comprobar victoria
+
+    if (score >= 5 && elapsed_time <= TIME_GAME) {
+
+        game_over = true;
+        result = "¡GANASTE!";
+
+    }
+
+    // Comprobar derrota
+
+    else if (elapsed_time >= TIME_GAME && score < 5) {
+
+        game_over = true;
+        result = "PERDISTE";
+
+    }
+
+
+    // Dibujar pantalla
+
+    ctx.fillStyle = back;
+    ctx.fillRect(0, 0, 500, 500);
+
+    score_label.draw();
+    time_label.draw();
+
+
+    // Dibujar tarjetas
+
+    for (let i = 0; i < num_cards; i++) {
+
+        if (show_text && i === active_card) {
+
+            cards[i].set_text("CLIC", 26);
+
+        } else {
+
+            cards[i].set_text("", 26);
+
+        }
+
+        cards[i].draw(10, 30);
+
+        cards[i].outline(BLUE, 5);
+
+    }
+
+
+    // Mostrar resultado
+
+    if (game_over) {
+
+        ctx.fillStyle = DARK_BLUE;
+        ctx.font = "35px Verdana";
+        ctx.textBaseline = "top";
+
+        ctx.fillText(result, 145, 380);
+
+        return;
+    }
+
+    // Repetir ciclo
+
+    setTimeout(game_loop, 25);
+}
+
+
+// Iniciar juego
+
+game_loop();
+
+</script>
+
+</body>
+</html>
